@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import "./App.css";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
 type MenuItem = {
     id: number;
     name: string;
@@ -29,7 +31,7 @@ const [latestOrderStatus, setLatestOrderStatus] = useState("");
     useEffect(() => {
         async function loadMenu() {
             try {
-                const response = await fetch("http://localhost:5000/api/menu");
+                const response = await fetch(`${API_BASE_URL}/api/menu`);
 
                 if (!response.ok) {
                     throw new Error("Could not load the menu.");
@@ -55,7 +57,7 @@ const [latestOrderStatus, setLatestOrderStatus] = useState("");
   async function refreshOrderStatus() {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/orders/${latestOrderId}`
+        `${API_BASE_URL}/api/orders/${latestOrderId}`
       );
 
       if (!response.ok) {
@@ -118,7 +120,7 @@ async function placeOrder(event: React.FormEvent<HTMLFormElement>) {
   setOrderMessage("");
 
   try {
-    const response = await fetch("http://localhost:5000/api/orders", {
+    const response = await fetch(`${API_BASE_URL}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
