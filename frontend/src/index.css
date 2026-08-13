@@ -1,0 +1,21 @@
+:root {
+    font-family: Inter, system-ui, sans-serif;
+    color: #28211c;
+    background: #fffaf5;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+}
+
+button,
+input,
+textarea {
+    font: inherit;
+}

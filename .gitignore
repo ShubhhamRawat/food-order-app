@@ -1,0 +1,17 @@
+# Build output - all projects
+**/bin/
+**/obj/
+**/dist/
+
+# IDE and local tooling
+**/.vs/
+.vs/
+
+# Node packages and caches
+**/node_modules/
+**/.vite/
+
+# Local configuration and secrets
+**/appsettings.Development.json
+**/.env
+**/.env.local
