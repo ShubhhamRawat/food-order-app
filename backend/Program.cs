@@ -40,7 +40,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:5173",
-                "https://food-order-npefyf5jo-shubhi7.vercel.app")
+                "https://food-order-npefyf5jo-shubhi7.vercel.app",
+                "https://food-order-app-theta.vercel.app")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
