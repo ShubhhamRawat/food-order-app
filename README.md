@@ -1,83 +1,119 @@
-# Food Order Management App
+# Food Order Management System
 
-A full-stack food order management feature for a food-delivery application.
+A full-stack, enterprise-grade food ordering and real-time tracking application built with **ASP.NET Core (.NET 9)**, **Entity Framework Core**, **SignalR**, and **React**.
 
-## Tech stack
+[![.NET 9](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
+[![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
+[![SignalR](https://img.shields.io/badge/Real--Time-SignalR%20WebSockets-green.svg)](https://learn.microsoft.com/en-us/aspnet/core/signalr/)
+[![Tests](https://img.shields.io/badge/xUnit-12%20Passed-brightgreen.svg)]()
 
-- Frontend: React, Vite, TypeScript
-- Backend: ASP.NET Core Web API (.NET 9)
-- Database: SQL Server with Entity Framework Core
-- Testing: xUnit with EF Core InMemory provider
+---
 
-## Features
+## Architecture Overview
 
-- Browse a database-backed food menu
-- Add items to a cart and change quantities
-- Submit delivery details at checkout
-- Server-side total calculation
-- Create and retrieve orders
-- Update order status: Received, Preparing, OutForDelivery, Delivered
-- Order status polling every 5 seconds
-- API request validation
-- Automated controller test
-
-## Project structure
-
-```text
-backend/   ASP.NET Core API and SQL Server migrations
-frontend/  React user interface
+This project implements a **Clean Layered Architecture** adhering to SOLID principles:
 
 ```
-
-## Run locally
-
-### Backend
-
-1. Open `backend/appsettings.Development.json`.
-2. Add your local SQL Server connection string:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=FoodOrderDb;Trusted_Connection=True;TrustServerCertificate=True;"
-  }
-}
+[ React Client (Vite + TypeScript) ]
+            │ HTTP (REST)
+            ▼
+ ┌──────────────────────┐
+ │   OrdersController   │  <-- Thin Controller (HTTP Request Mapping & Status Codes)
+ └──────────┬───────────┘
+            │ Injected via DI (Scoped)
+            ▼
+ ┌──────────────────────┐
+ │     OrderService     │  <-- Business Logic Layer (Validation, Price Calc, EF Core)
+ └─────┬──────────┬─────┘
+       │          │
+Queries│          │ Broadcasts Status via WebSockets
+       ▼          ▼
+┌────────────┐  ┌─────────────────────────┐
+│ AppDbContext│  │    OrderHub (SignalR)   │
+│ (EF Core)  │  │ (Group-based WebSockets)│
+└────────────┘  └─────────────────────────┘
 ```
 
-3. Run:
+- **Separation of Concerns:** Controllers handle strictly HTTP status codes (`CreatedAtAction`, `Ok`, `BadRequest`, `NotFound`). Database transactions, price aggregations, and business logic reside entirely within `IOrderService`.
+- **Real-Time Communication:** SignalR WebSockets replace HTTP polling. Clients subscribe to order-specific groups (`order-{id}`) and receive push updates when status transitions occur (`Received` -> `Preparing` -> `OutForDelivery` -> `Delivered`).
+- **Resilient Data Layer:** Entity Framework Core configured for both SQLite (zero-config cloud & local) and SQL Server. Database migrations auto-seed on application startup.
+- **Automated Testing:** 12 xUnit unit tests verifying service business logic, SignalR group dispatch via `Moq`, and controller HTTP contracts.
 
-```powershell
+---
+
+## Tech Stack
+
+- **Backend:** ASP.NET Core Web API (.NET 9)
+- **Architecture:** Layered Architecture / Service Layer (`IOrderService`)
+- **Real-Time Engine:** Microsoft SignalR (WebSockets with automatic reconnection)
+- **Data Access:** Entity Framework Core 9 (LINQ, `AsNoTracking`, eager loading)
+- **Database:** SQLite (default / cloud) & Microsoft SQL Server
+- **Testing:** xUnit, Moq, EF Core InMemory Provider
+- **Frontend:** React 18, TypeScript, Vite, `@microsoft/signalr`
+- **Deployment:** Docker, Render (Backend API), Vercel (Frontend SPA)
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Health check endpoint |
+| `GET` | `/api/menu` | Retrieve all available menu items |
+| `GET` | `/api/orders` | Retrieve order history (descending by timestamp) |
+| `GET` | `/api/orders/{id}` | Retrieve order details with line items |
+| `POST` | `/api/orders` | Create a new order with server-side price calculation |
+| `PATCH` | `/api/orders/{id}/status` | Update status & trigger real-time SignalR broadcast |
+| `WS` | `/hubs/orders` | SignalR WebSocket Hub for real-time tracking |
+
+---
+
+## Running Locally
+
+### Prerequisites
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [Node.js 18+](https://nodejs.org/)
+
+### 1. Backend
+
+```bash
 cd backend
-dotnet ef database update
-dotnet run --urls http://localhost:5000
+dotnet restore
+dotnet run --urls "http://localhost:5000"
+```
+The API starts at `http://localhost:5000` (SQLite database initializes and seeds automatically).
+
+### 2. Run Tests
+
+```bash
+dotnet test tests/FoodOrderApi.Tests/FoodOrderApi.Tests.csproj
 ```
 
-API: `http://localhost:5000`
+### 3. Frontend
 
-### Frontend
-
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
 ```
+Open `http://localhost:5173` in your browser.
 
-Frontend: `http://localhost:5173`
+---
 
-## API endpoints
+## Cloud Deployment
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/api/menu` | Get all menu items |
-| GET | `/api/orders` | Get all orders |
-| GET | `/api/orders/{id}` | Get one order |
-| POST | `/api/orders` | Create an order |
-| PATCH | `/api/orders/{id}/status` | Update order status |
+### Backend (Render / Docker)
+1. Fork or push to GitHub.
+2. Sign in to [Render.com](https://render.com) and click **New > Web Service** (or use Blueprint with `render.yaml`).
+3. Set:
+   - **Root Directory:** `backend`
+   - **Runtime:** `Docker`
+   - **Instance Type:** `Free`
+4. Copy your live Render URL (e.g., `https://food-order-api.onrender.com`).
 
-## Design decisions
-
-- The client sends menu IDs and quantities only.
-- The backend fetches authoritative menu prices and calculates the total.
-- `OrderItem.UnitPrice` preserves the purchase price even when a menu price changes.
-- Request DTOs prevent clients from setting server-controlled fields.
-- React uses polling to simulate real-time status updates; SignalR would be a production upgrade.
+### Frontend (Vercel)
+1. In your Vercel project dashboard, go to **Settings > Environment Variables**.
+2. Add:
+   - **Key:** `VITE_API_BASE_URL`
+   - **Value:** `https://your-backend-api.onrender.com`
+3. Trigger a redeploy.

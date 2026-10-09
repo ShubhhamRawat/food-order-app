@@ -1,8 +1,7 @@
-﻿using FoodOrderApi.Data;
 using FoodOrderApi.DTOs;
 using FoodOrderApi.Models;
+using FoodOrderApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FoodOrderApi.Controllers;
 
@@ -10,58 +9,22 @@ namespace FoodOrderApi.Controllers;
 [Route("api/[controller]")]
 public class OrdersController : ControllerBase
 {
-    private readonly AppDbContext _dbContext;
+    private readonly IOrderService _orderService;
 
-    public OrdersController(AppDbContext dbContext)
+    public OrdersController(IOrderService orderService)
     {
-        _dbContext = dbContext;
+        _orderService = orderService;
     }
 
     [HttpPost]
-    public async Task<ActionResult<Order>> CreateOrder(
-        CreateOrderRequest request)
+    public async Task<ActionResult<Order>> CreateOrder(CreateOrderRequest request)
     {
-        var menuItemIds = request.Items
-            .Select(item => item.MenuItemId)
-            .Distinct()
-            .ToList();
+        var order = await _orderService.CreateOrderAsync(request);
 
-        var menuItems = await _dbContext.MenuItems
-            .Where(menuItem => menuItemIds.Contains(menuItem.Id))
-            .ToListAsync();
-
-        if (menuItems.Count != menuItemIds.Count)
+        if (order is null)
         {
             return BadRequest("One or more menu items do not exist.");
         }
-
-        var order = new Order
-        {
-            CustomerName = request.CustomerName,
-            DeliveryAddress = request.DeliveryAddress,
-            PhoneNumber = request.PhoneNumber,
-            Status = OrderStatus.Received,
-            CreatedAtUtc = DateTime.UtcNow
-        };
-
-        foreach (var requestedItem in request.Items)
-        {
-            var menuItem = menuItems.Single(
-                item => item.Id == requestedItem.MenuItemId);
-
-            order.Items.Add(new OrderItem
-            {
-                MenuItemId = menuItem.Id,
-                Quantity = requestedItem.Quantity,
-                UnitPrice = menuItem.Price
-            });
-        }
-
-        order.TotalAmount = order.Items.Sum(
-            item => item.UnitPrice * item.Quantity);
-
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
 
         return CreatedAtAction(
             nameof(GetOrderById),
@@ -72,10 +35,7 @@ public class OrdersController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Order>> GetOrderById(int id)
     {
-        var order = await _dbContext.Orders
-            .Include(order => order.Items)
-            .ThenInclude(item => item.MenuItem)
-            .FirstOrDefaultAsync(order => order.Id == id);
+        var order = await _orderService.GetOrderByIdAsync(id);
 
         if (order is null)
         {
@@ -87,19 +47,20 @@ public class OrdersController : ControllerBase
 
     [HttpPatch("{id:int}/status")]
     public async Task<ActionResult<Order>> UpdateOrderStatus(
-    int id,
-    UpdateOrderStatusRequest request)
+        int id,
+        UpdateOrderStatusRequest request)
     {
-        var order = await _dbContext.Orders.FindAsync(id);
+        if (!request.Status.HasValue)
+        {
+            return BadRequest("Status is required.");
+        }
+
+        var order = await _orderService.UpdateOrderStatusAsync(id, request.Status.Value);
 
         if (order is null)
         {
             return NotFound();
         }
-
-        order.Status = request.Status!.Value;
-
-        await _dbContext.SaveChangesAsync();
 
         return Ok(order);
     }
@@ -107,12 +68,7 @@ public class OrdersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<Order>>> GetOrders()
     {
-        var orders = await _dbContext.Orders
-            .Include(order => order.Items)
-            .ThenInclude(item => item.MenuItem)
-            .OrderByDescending(order => order.CreatedAtUtc)
-            .ToListAsync();
-
+        var orders = await _orderService.GetAllOrdersAsync();
         return Ok(orders);
     }
 }

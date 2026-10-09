@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState } from "react";
+import * as signalR from "@microsoft/signalr";
 import "./App.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -49,34 +50,43 @@ const [latestOrderStatus, setLatestOrderStatus] = useState("");
         loadMenu();
     }, []);
 
+    // Real-Time Order Tracking via SignalR WebSockets
     useEffect(() => {
-  if (latestOrderId === null) {
-    return;
-  }
+        if (latestOrderId === null) {
+            return;
+        }
 
-  async function refreshOrderStatus() {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/orders/${latestOrderId}`
-      );
+        // 1. Establish the persistent SignalR Hub connection
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl(`${API_BASE_URL}/hubs/orders`)
+            .withAutomaticReconnect()
+            .build();
 
-      if (!response.ok) {
-        return;
-      }
+        // 2. Start connection and subscribe to this specific order's real-time events
+        connection
+            .start()
+            .then(() => {
+                console.log("[SignalR] Connected to OrderHub");
+                return connection.invoke("JoinOrderGroup", latestOrderId.toString());
+            })
+            .catch((err) => console.error("[SignalR] Connection Error:", err));
 
-      const order = await response.json();
-      setLatestOrderStatus(order.status);
-    } catch {
-      // Keep showing the last known status if refresh fails.
-    }
-  }
+        // 3. Listen for real-time status updates broadcast by the backend
+        connection.on("OrderStatusUpdated", (data: { orderId: number; status: string }) => {
+            console.log("[SignalR] Received OrderStatusUpdated event:", data);
+            if (data.orderId === latestOrderId) {
+                setLatestOrderStatus(data.status);
+            }
+        });
 
-  refreshOrderStatus();
-
-  const intervalId = window.setInterval(refreshOrderStatus, 5000);
-
-  return () => window.clearInterval(intervalId);
-}, [latestOrderId]);
+        // 4. Clean up connection on component unmount or when tracked order changes
+        return () => {
+            connection
+                .invoke("LeaveOrderGroup", latestOrderId.toString())
+                .catch(() => {})
+                .finally(() => connection.stop());
+        };
+    }, [latestOrderId]);
 
 function addToCart(menuItem: MenuItem) {
   setCartItems((currentItems) => {
