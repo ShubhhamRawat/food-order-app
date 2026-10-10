@@ -28,6 +28,28 @@ const [orderMessage, setOrderMessage] = useState("");
 const [isSubmitting, setIsSubmitting] = useState(false);
 const [latestOrderId, setLatestOrderId] = useState<number | null>(null);
 const [latestOrderStatus, setLatestOrderStatus] = useState("");
+const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+async function updateStatus(newStatus: string) {
+    if (latestOrderId === null) return;
+    setIsUpdatingStatus(true);
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/orders/${latestOrderId}/status`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ status: newStatus }),
+        });
+        if (!response.ok) {
+            console.error("Failed to update status on server.");
+        }
+    } catch (err) {
+        console.error("Error updating order status:", err);
+    } finally {
+        setIsUpdatingStatus(false);
+    }
+}
 
     useEffect(() => {
         async function loadMenu() {
@@ -294,13 +316,52 @@ const cartTotal = cartItems.reduce(
 
   {orderMessage && <p className="order-message">{orderMessage}</p>}
   {latestOrderId !== null && (
-  <section className="order-status">
-    <h3>Track order #{latestOrderId}</h3>
-    <p>
-      Current status: <strong>{latestOrderStatus}</strong>
-    </p>
-  </section>
-)}
+    <section className="order-status">
+      <div className="order-status__header">
+        <h3>📍 Track Order #{latestOrderId}</h3>
+        <span className="live-indicator">
+          <span className="live-dot"></span> Live SignalR WebSockets
+        </span>
+      </div>
+
+      <p className="order-status__current">
+        Current Status: <span className={`status-pill status-${latestOrderStatus.toLowerCase()}`}>{latestOrderStatus}</span>
+      </p>
+
+      <div className="kitchen-simulator">
+        <div className="kitchen-simulator__title">
+          <span>👨‍🍳 Staff Simulator</span>
+          <small>Click to advance status — updates live via SignalR across all connected clients</small>
+        </div>
+        <div className="simulator-actions">
+          <button
+            type="button"
+            className="sim-btn sim-preparing"
+            disabled={isUpdatingStatus || latestOrderStatus === "Preparing"}
+            onClick={() => updateStatus("Preparing")}
+          >
+            🍳 Preparing
+          </button>
+          <button
+            type="button"
+            className="sim-btn sim-delivery"
+            disabled={isUpdatingStatus || latestOrderStatus === "OutForDelivery"}
+            onClick={() => updateStatus("OutForDelivery")}
+          >
+            🛵 Out for Delivery
+          </button>
+          <button
+            type="button"
+            className="sim-btn sim-delivered"
+            disabled={isUpdatingStatus || latestOrderStatus === "Delivered"}
+            onClick={() => updateStatus("Delivered")}
+          >
+            ✅ Delivered
+          </button>
+        </div>
+      </div>
+    </section>
+  )}
 </section>
         </main>
     );
